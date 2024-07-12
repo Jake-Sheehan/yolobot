@@ -1,0 +1,6 @@
+[workspace]
+members = [
+    "yolobot_core",
+    "exchange_manager",
+]
+resolver = "2"
