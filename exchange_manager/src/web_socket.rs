@@ -3,67 +3,43 @@
 //! 'web_socket' is a collection of utils for connecting to web sockets.
 //!
 
-#![allow(dead_code)]
-
 use anyhow::Result;
+use futures_util::stream::{SplitSink, SplitStream};
 use futures_util::{SinkExt, StreamExt};
-use tokio::sync::mpsc;
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
-use tokio_tungstenite::tungstenite::Message;
+use tokio::net::TcpStream;
+use tokio_tungstenite::tungstenite::{Error, Message};
+use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 
-type JoinHandle = tokio::task::JoinHandle<Result<()>>;
+type SinkType = SplitSink<WebSocketStream<MaybeTlsStream<TcpStream>>, Message>;
+type StreamType = SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>;
 
-/// Connects to a web socket, wires an unbounded mpsc channel
-/// to the socket, and returns a join handle.
-///
-/// # Errors
-///
-/// Returns an anyhow Result. Errors can occur if
-/// the connection fails, a send fails, or a receive fails.
-async fn connect(
-    url: &str,
-    tx: UnboundedSender<Message>,
-    mut rx: UnboundedReceiver<Message>,
-) -> Result<JoinHandle> {
-    let (ws, _res) = tokio_tungstenite::connect_async(url).await?;
-    println!("connected to {}", url);
-    let (mut sink, mut stream) = ws.split();
-
-    let join_handle = tokio::spawn(async move {
-        loop {
-            tokio::select! {
-                // receive message to send through web socket
-                Some(msg) = rx.recv() => {
-                    sink.send(msg).await?;
-                }
-                // get message from websocket
-                Some(msg) = stream.next() => {
-                    if let Ok(message) = msg {
-                        tx.send(message)?;
-                    }
-                }
-            }
-        }
-    });
-
-    return Ok(join_handle);
+#[allow(dead_code)]
+pub struct WebSocketSession {
+    outbound: SinkType,
+    pub inbound: StreamType,
 }
 
-/// Creates a new web socket connection. This is part of the
-/// public API.
-///
-/// # Errors
-///
-/// Returns an anyhow Result. Errors can occur in connect();
-pub async fn new(
-    url: &str,
-) -> Result<(
-    UnboundedSender<Message>,
-    UnboundedReceiver<Message>,
-    JoinHandle,
-)> {
-    let (tx1, rx1) = mpsc::unbounded_channel();
-    let (tx2, rx2) = mpsc::unbounded_channel();
-    let join_handle = connect(url, tx1, rx2).await?;
-    return Ok((tx2, rx1, join_handle));
+impl WebSocketSession {
+    pub async fn new(url: &str) -> Result<Self> {
+        let (ws, _res) = tokio_tungstenite::connect_async(url).await?;
+        let (sink, stream) = ws.split();
+        return Ok(Self {
+            outbound: sink,
+            inbound: stream,
+        });
+    }
+
+    pub async fn send(&mut self, msg: Message) -> Result<()> {
+        self.outbound.send(msg).await?;
+        return Ok(());
+    }
+
+    pub async fn recv(&mut self) -> Option<Result<Message, Error>> {
+        return self.inbound.next().await;
+    }
+
+    pub async fn close(&mut self) -> Result<()> {
+        self.outbound.close().await?;
+        return Ok(());
+    }
 }

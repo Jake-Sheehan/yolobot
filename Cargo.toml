@@ -2,5 +2,6 @@
 members = [
     "yolobot_core",
     "exchange_manager",
+    "market_data",
 ]
 resolver = "2"
