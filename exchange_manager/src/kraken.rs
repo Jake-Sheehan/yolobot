@@ -5,7 +5,7 @@ pub fn subscribe(channel: &str, symbols: &Vec<String>) -> Vec<u8> {
         .collect::<Vec<String>>()
         .join(", ");
     let message = format!(
-        r#"{{"method": "subscribe", "params": {{ "channel": "{channel}", "symbol": [{symbols}]}}}}"#
+        r#"{{"method": "subscribe", "params": {{ "channel": "{channel}", "snapshot": false, "symbol": [{symbols}]}}}}"#
     );
     return message.as_bytes().to_vec();
 }
