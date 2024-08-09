@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 exchange_manager = { path = "../exchange_manager" }
 market_data = { path = "../market_data" }
+yolobot_utils = { path = "../yolobot_utils" }
 tokio = { version = "1.38.0", features = ["full"] }
 tokio-tungstenite = { version = "0.23.1", features = ["native-tls"] }
 anyhow = "1.0.86"

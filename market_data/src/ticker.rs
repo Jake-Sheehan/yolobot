@@ -1,19 +1,26 @@
 use anyhow::Result;
+use exchange_manager::data_models::Response::{Stream, Subscribe};
 use exchange_manager::data_models::{Response, StreamResponse, TickerData};
 use exchange_manager::kraken;
 use exchange_manager::smart_router::Router;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
+use thiserror::Error;
 use tokio::task::JoinHandle;
 use tokio_tungstenite::tungstenite::Message;
+use yolobot_utils::error;
 
+#[derive(Error, Debug)]
 pub enum TickerError {
-    RecvError,
+    #[error("subscribe failed")]
+    SubscribeError,
+    #[error("stream contained no ticker data")]
+    NoData,
 }
 
 pub struct Ticker {
     data_map: Arc<HashMap<String, RwLock<TickerData>>>,
-    join_handle: JoinHandle<TickerError>,
+    join_handle: JoinHandle<Result<()>>,
 }
 
 impl Ticker {
@@ -32,27 +39,44 @@ impl Ticker {
         let mut router = Router::new().await;
 
         let data_map_clone = Arc::clone(&data_map);
-        let join_handle = tokio::spawn(async move {
+        let join_handle: JoinHandle<Result<()>> = tokio::spawn(async move {
             let subscribe_msg = kraken::subscribe("ticker", &symbols);
-            let _ = router.send(Message::Binary(subscribe_msg)).await;
+            router.send(Message::Binary(subscribe_msg)).await?;
             loop {
                 let res = router.recv().await;
                 match res {
-                    Some(msg) => {
-                        if let Response::Stream(stream) = msg {
-                            if let StreamResponse::ticker { data, .. } = stream {
-                                let ticker_data = &data[0];
-                                let lock = data_map_clone.get(&ticker_data.symbol).unwrap();
-                                let mut unlock = lock.write().unwrap();
-                                *unlock = ticker_data.clone();
+                    Some(Stream(stream)) => {
+                        if let StreamResponse::ticker { mut data, .. } = stream {
+                            if data.is_empty() {
+                                error::log(TickerError::NoData);
+                                continue;
                             }
+
+                            data.drain(..).for_each(|ticker_data| {
+                                match data_map_clone.get(&ticker_data.symbol) {
+                                    Some(lock) => {
+                                        let mut write_guard =
+                                            lock.write().unwrap_or_else(|poisoned| {
+                                                return poisoned.into_inner();
+                                            });
+                                        *write_guard = ticker_data;
+                                    }
+
+                                    None => (),
+                                }
+                            })
                         }
                     }
-                    None => {
-                        return TickerError::RecvError;
+                    Some(Subscribe(subscribe)) => {
+                        if subscribe.success == false {
+                            error::log(TickerError::SubscribeError);
+                            break;
+                        }
                     }
+                    None => break,
                 }
             }
+            return Ok(());
         });
 
         return Ok(Self {
@@ -61,10 +85,14 @@ impl Ticker {
         });
     }
 
-    pub async fn get(&self, symbol: &str) -> Option<TickerData> {
-        let lock = self.data_map.get(symbol).unwrap();
-        let unlock = lock.read().unwrap();
-        return Some(unlock.clone());
+    pub fn get(&self, symbol: &str) -> Option<TickerData> {
+        let lock = self.data_map.get(symbol)?;
+        let read_guard = lock.read().unwrap();
+        return Some(read_guard.clone());
+    }
+
+    pub fn get_all(&self) -> Arc<HashMap<String, RwLock<TickerData>>> {
+        return Arc::clone(&self.data_map);
     }
 
     pub async fn close(&self) {

@@ -10,3 +10,5 @@ tokio = { version = "1.38.0", features = ["full"] }
 tokio-tungstenite = { version = "0.23.1", features = ["native-tls"] }
 anyhow = "1.0.86"
 exchange_manager = { path = "../exchange_manager" }
+yolobot_utils = { path = "../yolobot_utils" }
+thiserror = "1.0.63"

@@ -38,18 +38,17 @@ impl TickerData {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SubscribeResult {
     channel: String,
-    event_trigger: String,
     snapshot: bool,
     symbol: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct SubscribeResponse {
-    method: String,
-    result: SubscribeResult,
-    success: bool,
-    time_in: String,
-    time_out: String,
+    pub method: String,
+    pub result: SubscribeResult,
+    pub success: bool,
+    pub time_in: String,
+    pub time_out: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
