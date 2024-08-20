@@ -1,6 +1,6 @@
 #![allow(unused_imports)]
 use anyhow::Result;
-use exchange_manager;
+use exchange_manager::{self, data_models::TickerData};
 use market_data;
 use std::sync::Arc;
 use tokio::time::{sleep, Duration};
@@ -15,35 +15,14 @@ async fn main() {
             .unwrap(),
     );
 
-    let data_map = Arc::clone(&ticker.get_all());
+    let mut eth = TickerData::new("ETH/USD".to_string());
+    let mut btc = TickerData::new("BTC/USD".to_string());
 
-    //let ticker_clone1 = Arc::clone(&ticker);
-    //let ticker_clone2 = Arc::clone(&ticker);
-
-    //let join_handle1 = tokio::spawn(async move {
-    //    loop {
-    //       sleep(Duration::from_millis(50)).await;
-    //        println!("{:#?}", ticker_clone1.get("BTC/USD").unwrap());
-    //    }
-    //});
-
-    //let join_handle2 = tokio::spawn(async move {
-    //    loop {
-    //        sleep(Duration::from_millis(50)).await;
-    //        println!("{:#?}", ticker_clone2.get("ETH/USD").unwrap());
-    //    }
-    //});
-
-    //let _x = tokio::join!(join_handle1, join_handle2);
-
-    let join = tokio::spawn(async move {
-        loop {
-            print!("\x1B[2J\x1B[1;1H");
-            println!("{:?}", data_map);
-        }
-    });
-
-    let _ = join.await;
-
-    //return Ok(());
+    loop {
+        eth = ticker.get(&eth.symbol).await.expect("ahhhhh");
+        btc = ticker.get(&btc.symbol).await.expect("ahhhhh");
+        print!("\x1B[2J\x1B[1;1H");
+        println!("{:?}", eth);
+        println!("{:?}", btc);
+    }
 }

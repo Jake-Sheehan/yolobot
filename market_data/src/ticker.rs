@@ -4,8 +4,9 @@ use exchange_manager::data_models::{Response, StreamResponse, TickerData};
 use exchange_manager::kraken;
 use exchange_manager::smart_router::Router;
 use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 use thiserror::Error;
+use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
 use tokio_tungstenite::tungstenite::Message;
 use yolobot_utils::error;
@@ -52,19 +53,13 @@ impl Ticker {
                                 continue;
                             }
 
-                            data.drain(..).for_each(|ticker_data| {
-                                match data_map_clone.get(&ticker_data.symbol) {
-                                    Some(lock) => {
-                                        let mut write_guard =
-                                            lock.write().unwrap_or_else(|poisoned| {
-                                                return poisoned.into_inner();
-                                            });
-                                        *write_guard = ticker_data;
-                                    }
-
-                                    None => (),
+                            match data_map_clone.get(&data[0].symbol) {
+                                Some(lock) => {
+                                    let mut write_guard = lock.write().await;
+                                    *write_guard = data[0].clone();
                                 }
-                            })
+                                None => (),
+                            }
                         }
                     }
                     Some(Subscribe(subscribe)) => {
@@ -73,7 +68,9 @@ impl Ticker {
                             break;
                         }
                     }
-                    None => break,
+                    None => {
+                        break;
+                    }
                 }
             }
             return Ok(());
@@ -85,9 +82,15 @@ impl Ticker {
         });
     }
 
-    pub fn get(&self, symbol: &str) -> Option<TickerData> {
+    pub async fn get(&self, symbol: &str) -> Option<TickerData> {
         let lock = self.data_map.get(symbol)?;
-        let read_guard = lock.read().unwrap();
+        let read_guard = lock.read().await;
+        return Some(read_guard.clone());
+    }
+
+    pub fn blocking_get(&self, symbol: &str) -> Option<TickerData> {
+        let lock = self.data_map.get(symbol)?;
+        let read_guard = lock.blocking_read();
         return Some(read_guard.clone());
     }
 

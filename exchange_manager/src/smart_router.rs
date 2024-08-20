@@ -1,15 +1,8 @@
-#![allow(unused)]
 use crate::data_models;
 use crate::data_models::Response;
-use crate::kraken;
 use crate::web_socket;
 use anyhow::Result;
-use futures_util::StreamExt;
-use tokio::sync::mpsc;
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio_tungstenite::tungstenite::Message;
-
-type JoinHandle = tokio::task::JoinHandle<Result<()>>;
 
 pub struct Router {
     exchange: web_socket::WebSocketSession,
