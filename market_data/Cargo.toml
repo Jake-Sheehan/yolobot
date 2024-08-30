@@ -12,3 +12,4 @@ anyhow = "1.0.86"
 exchange_manager = { path = "../exchange_manager" }
 yolobot_utils = { path = "../yolobot_utils" }
 thiserror = "1.0.63"
+simd-json = "0.13.10"

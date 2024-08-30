@@ -1,5 +1,5 @@
-use crate::data_models;
-use crate::data_models::Response;
+use core::panic;
+
 use crate::web_socket;
 use anyhow::Result;
 use tokio_tungstenite::tungstenite::Message;
@@ -22,24 +22,13 @@ impl Router {
         return Ok(());
     }
 
-    pub async fn recv(&mut self) -> Option<data_models::Response> {
+    pub async fn recv(&mut self) -> Option<Message> {
         match self.exchange.recv().await {
-            Some(message) => match message {
-                Ok(msg) => {
-                    if let Message::Text(mut content) = msg {
-                        let res: Response = unsafe {
-                            simd_json::from_slice(content.as_bytes_mut()).expect(&content)
-                        };
-                        return Some(res);
-                    } else {
-                        return None;
-                    }
-                }
-                Err(e) => panic!("{}", e),
+            Some(msg) => match msg {
+                Ok(result) => Some(result),
+                Err(e) => panic!("Error: {e}"),
             },
-            None => {
-                return None;
-            }
+            None => None,
         }
     }
 

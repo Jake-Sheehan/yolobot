@@ -1,4 +1,5 @@
 pub mod error;
+pub mod ring_buffer;
 
 pub fn add(left: usize, right: usize) -> usize {
     left + right
