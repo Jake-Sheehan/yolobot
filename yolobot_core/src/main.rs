@@ -1,6 +1,10 @@
 #![allow(unused_imports)]
 use anyhow::Result;
-use exchange_manager::{self, data_models::TickerData};
+use exchange_manager::data_models::Response::Stream;
+use exchange_manager::{
+    self,
+    data_models::{StreamResponse, TickerData, TickerResponse},
+};
 use market_data;
 use std::sync::Arc;
 use tokio::time::{sleep, Duration};
@@ -16,9 +20,14 @@ async fn main() {
     loop {
         sleep(Duration::from_millis(33)).await;
         let data = ticker.get().await;
-        print!("\x1B[2J\x1B[1;1H");
+
         if data.is_some() {
-            println!("{:#?}", data);
+            if let Some(Stream(stream)) = data {
+                if let StreamResponse::ticker { data, .. } = stream {
+                    print!("\x1B[2J\x1B[1;1H");
+                    println!("{:#?}", data);
+                }
+            }
         }
     }
 }
