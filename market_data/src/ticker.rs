@@ -11,7 +11,7 @@ use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
 use tokio_tungstenite::tungstenite::Message;
 use yolobot_utils::error;
-use yolobot_utils::ring_buffer::RingBuffer;
+use yolobot_utils::sized_stack::SizedStack;
 
 #[derive(Error, Debug)]
 pub enum TickerError {
@@ -22,31 +22,54 @@ pub enum TickerError {
 }
 
 pub struct Ticker {
-    buffer: RingBuffer,
+    buffer: Arc<RwLock<SizedStack<Message>>>,
     join_handle: JoinHandle<Result<()>>,
 }
 
 impl Ticker {
-    pub async fn new(symbol: &'static str) -> Result<Self> {
+    pub async fn new(symbol: &'static str, buffer_capacity: usize) -> Result<Self> {
         let mut router = Router::new().await;
 
+        let stack = Arc::new(RwLock::new(SizedStack::new(buffer_capacity)));
+
+        let stack_clone = Arc::clone(&stack);
         let join_handle: JoinHandle<Result<()>> = tokio::spawn(async move {
             let subscribe_msg = kraken::subscribe("ticker", &vec![symbol.to_string()]);
             router.send(Message::Binary(subscribe_msg)).await?;
             loop {
                 let res = router.recv().await;
+                if let Some(msg) = res {
+                    let mut write_guard = stack_clone.write().await;
+                    write_guard.push(msg);
+                }
             }
             return Ok(());
         });
 
-        return Ok(Self { join_handle });
+        return Ok(Self {
+            join_handle,
+            buffer: stack,
+        });
     }
 
-    pub async fn get(&self, symbol: &str) {}
+    pub async fn get(&self) -> Option<Response> {
+        let stack = Arc::clone(&self.buffer);
+        let mut write_guard = stack.write().await;
+        let raw_msg = write_guard.pop();
+        if let Some(msg) = raw_msg {
+            if let Message::Text(mut content) = msg {
+                let json: Response =
+                    unsafe { simd_json::from_slice(content.as_bytes_mut()).expect("ahhhh") };
+                return Some(json);
+            } else {
+                return None;
+            }
+        } else {
+            return None;
+        }
+    }
 
     pub fn blocking_get(&self, symbol: &str) {}
-
-    pub fn get_all(&self) {}
 
     pub async fn close(&self) {
         self.join_handle.abort();
